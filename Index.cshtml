@@ -1,0 +1,147 @@
+﻿@{
+    ViewData["Title"] = "MicroML AST Visualizer";
+}
+
+<div class="container">
+    <h1>MicroML AST Visualizer</h1>
+    
+    <div class="editor-container">
+        <textarea id="code-input" placeholder="Enter MicroML code here...
+Examples:
+1. (1 + 2)
+2. \x.x
+3. (\x.x) 5
+4. let y = 5 in y
+5. let double = \x.(x * 2) in double 5"></textarea>
+        <button id="parse-btn" class="btn btn-primary">Parse</button>
+    </div>
+    
+    <div id="error-message" class="error"></div>
+    
+    <div class="ast-container">
+        <div id="ast-diagram"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('parse-btn').addEventListener('click', parseCode);
+        
+        // Also parse when pressing Ctrl+Enter in the textarea
+        document.getElementById('code-input').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                parseCode();
+            }
+        });
+
+        function parseCode() {
+            const code = document.getElementById('code-input').value.trim();
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = '';
+            
+            if (!code) {
+                errorElement.textContent = 'Please enter some MicroML code';
+                return;
+            }
+
+            // Show loading state
+            const btn = document.getElementById('parse-btn');
+            btn.disabled = true;
+            btn.textContent = 'Parsing...';
+            
+            fetch('/Home/Parse', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code: code })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    renderAST(data.ast);
+                } else {
+                    errorElement.textContent = data.error;
+                    errorElement.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                errorElement.textContent = 'An error occurred while parsing: ' + error.message;
+                errorElement.style.display = 'block';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Parse';
+            });
+        }
+        
+        function renderAST(astNode) {
+            const container = document.getElementById('ast-diagram');
+            container.innerHTML = '';
+            
+            if (astNode) {
+                const treeElement = createTreeElement(astNode);
+                container.appendChild(treeElement);
+            }
+        }
+        
+        function createTreeElement(node) {
+            const element = document.createElement('div');
+            element.className = 'node';
+            
+            const header = document.createElement('div');
+            header.className = 'node-header';
+            
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'node-type';
+            typeSpan.textContent = node.type;
+            header.appendChild(typeSpan);
+            
+            // Add specific node details
+            if (node.value !== undefined) {
+                addDetailSpan(header, 'node-value', node.value);
+            }
+            if (node.name !== undefined) {
+                addDetailSpan(header, 'node-name', node.name);
+            }
+            if (node.operator !== undefined) {
+                addDetailSpan(header, 'node-operator', node.operator);
+            }
+            if (node.parameter !== undefined) {
+                addDetailSpan(header, 'node-parameter', node.parameter);
+            }
+            if (node.variable !== undefined) {
+                addDetailSpan(header, 'node-variable', node.variable);
+            }
+            
+            element.appendChild(header);
+            
+            // Add children if they exist
+            if (node.children && node.children.length > 0) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'node-children';
+                
+                node.children.forEach(child => {
+                    const childElement = createTreeElement(child);
+                    childrenContainer.appendChild(childElement);
+                });
+                
+                element.appendChild(childrenContainer);
+            }
+            
+            return element;
+        }
+
+        function addDetailSpan(parent, className, value) {
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = `: ${value}`;
+            parent.appendChild(span);
+        }
+    </script>
+}
